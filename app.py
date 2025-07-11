@@ -124,7 +124,7 @@ class EnhancedTrendingDataManager:
     def __init__(self, app_instance):
         self.app = app_instance
         # 指定されたCSVパス
-        self.csv_path = r"C:\Users\2501016\Box\0000_マイフォルダ\自習用\python\Yahooリアルタイム検索\20250710更新_ポスト数集計.csv"
+        self.csv_path = r"C:\Users\2501016\Box\0000_マイフォルダ\自習用\movie_app ver.2\20250710更新_ポスト数集計.csv"
         self.df = None
         # MeCabの初期化（形態素解析用）
         try:
