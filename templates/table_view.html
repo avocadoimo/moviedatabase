@@ -4,7 +4,7 @@
 
 {% block content %}
 
-<h2>🎬 興行収入データベース</h2>
+<h2>興行収入データベース</h2>
 
 <!-- 検索フォーム -->
 <form method="get" style="margin-bottom: 20px;">
@@ -20,20 +20,11 @@
     <input type="submit" value="検索" class="button">
 </form>
 
-<!-- 🔁 カード表示への切り替えリンク -->
+<!-- カード表示への切り替えリンク -->
 <div style="margin-bottom: 10px;">
-    <a href="{{ url_for('search',
-        year=request.args.get('year'),
-        title=request.args.get('title'),
-        distributor=request.args.get('distributor'),
-        min_revenue=request.args.get('min_revenue'),
-        max_revenue=request.args.get('max_revenue'),
-        director=request.args.get('director'),
-        actor=request.args.get('actor'),
-        order_by=order_by,
-        sort=sort) }}"
+    <a href="{{ url_for('search') }}"
        style="padding: 6px 12px; background-color: #f5f5f5; border-radius: 6px; color: #333; text-decoration: none; border: 1px solid #ccc;">
-       🖼 カード表示に切り替え
+       カード表示に切り替え
     </a>
 </div>
 
@@ -41,32 +32,24 @@
 <table style="width: 100%; border-collapse: collapse; background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
     <thead>
         <tr style="background-color: #f0f0f0;">
-            {% set sort_icon = {'asc': '▲', 'desc': '▼'} %}
-            {% set next_sort = 'asc' if sort == 'desc' else 'desc' %}
-
-            {% macro sort_link(column, label) %}
             <th style="padding: 10px; border: 1px solid #ccc;">
-                <a href="{{ url_for('table_view',
-                    year=request.args.get('year'),
-                    title=request.args.get('title'),
-                    distributor=request.args.get('distributor'),
-                    min_revenue=request.args.get('min_revenue'),
-                    max_revenue=request.args.get('max_revenue'),
-                    director=request.args.get('director'),
-                    actor=request.args.get('actor'),
-                    order_by=column,
-                    sort=(next_sort if order_by == column else 'asc')) }}">
-                    {{ label }}{% if order_by == column %}{{ sort_icon[sort] }}{% endif %}
-                </a>
+                <a href="{{ url_for('table_view', order_by='year', sort='asc') }}">年</a>
             </th>
-            {% endmacro %}
-
-            {{ sort_link('year', '年') }}
-            {{ sort_link('release_date', '公開日') }}
-            {{ sort_link('title', '作品名') }}
-            {{ sort_link('revenue', '興収(億円)') }}
-            {{ sort_link('category', '区分') }}
-            {{ sort_link('distributor', '配給会社') }}
+            <th style="padding: 10px; border: 1px solid #ccc;">
+                <a href="{{ url_for('table_view', order_by='release_date', sort='asc') }}">公開日</a>
+            </th>
+            <th style="padding: 10px; border: 1px solid #ccc;">
+                <a href="{{ url_for('table_view', order_by='title', sort='asc') }}">作品名</a>
+            </th>
+            <th style="padding: 10px; border: 1px solid #ccc;">
+                <a href="{{ url_for('table_view', order_by='revenue', sort='desc') }}">興収(億円)</a>
+            </th>
+            <th style="padding: 10px; border: 1px solid #ccc;">
+                <a href="{{ url_for('table_view', order_by='category', sort='asc') }}">区分</a>
+            </th>
+            <th style="padding: 10px; border: 1px solid #ccc;">
+                <a href="{{ url_for('table_view', order_by='distributor', sort='asc') }}">配給会社</a>
+            </th>
         </tr>
     </thead>
     <tbody>
@@ -84,5 +67,24 @@
         {% endfor %}
     </tbody>
 </table>
+
+{% if not movies %}
+<div style="text-align: center; padding: 40px; color: #666;">
+    <h3>検索結果が見つかりませんでした</h3>
+    <p>検索条件を変更して再度お試しください。</p>
+</div>
+{% endif %}
+
+<div style="text-align: center; margin-top: 20px;">
+    {% if pagination.has_prev %}
+        <a href="{{ url_for('table_view', page=pagination.prev_num) }}" 
+           style="margin: 0 10px; text-decoration: none; color: #1a73e8;">← 前へ</a>
+    {% endif %}
+    <span>ページ {{ pagination.page }} / {{ pagination.pages }}</span>
+    {% if pagination.has_next %}
+        <a href="{{ url_for('table_view', page=pagination.next_num) }}" 
+           style="margin: 0 10px; text-decoration: none; color: #1a73e8;">次へ →</a>
+    {% endif %}
+</div>
 
 {% endblock %}
