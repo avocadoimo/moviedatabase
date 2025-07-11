@@ -21,8 +21,9 @@ app = Flask(__name__)
 app.secret_key = "movie_admin_secret_key_1529"
 app.permanent_session_lifetime = timedelta(hours=24)
 
-# 管理者パスワード
+# パスワード設定
 ADMIN_PASSWORD = "1529"
+SITE_ACCESS_PASSWORD = "imo4649"
 
 def parse_date(s):
     try:
@@ -83,6 +84,20 @@ class TrendingData(db.Model):
     post_count = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+def site_access_required(f):
+    """サイトアクセス認証デコレータ"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # サイトログインページは除外
+        if request.endpoint == 'site_login':
+            return f(*args, **kwargs)
+        
+        # サイトアクセス認証をチェック
+        if not session.get('site_authenticated'):
+            return redirect(url_for('site_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 def admin_required(f):
     """管理者認証デコレータ"""
     @wraps(f)
@@ -92,7 +107,32 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+@app.route("/site-login", methods=['GET', 'POST'])
+def site_login():
+    """サイトアクセス認証"""
+    if request.method == 'POST':
+        password = request.form.get('password', '').strip()
+        
+        if password == SITE_ACCESS_PASSWORD:
+            session['site_authenticated'] = True
+            session.permanent = True
+            print("サイトアクセス認証成功")
+            
+            # 元々アクセスしようとしていたページにリダイレクト
+            next_page = request.args.get('next', url_for('search'))
+            return redirect(next_page)
+        else:
+            print("サイトアクセス認証失敗: 間違ったパスワード")
+            return render_template('site_login.html', error="パスワードが正しくありません")
+    
+    # 既に認証済みの場合はリダイレクト
+    if session.get('site_authenticated'):
+        return redirect(url_for('search'))
+    
+    return render_template('site_login.html')
+
 @app.route("/admin/login", methods=['GET', 'POST'])
+@site_access_required
 def admin_login():
     """管理者ログイン"""
     if request.method == 'POST':
@@ -101,10 +141,10 @@ def admin_login():
         if password == ADMIN_PASSWORD:
             session['admin_authenticated'] = True
             session.permanent = True
-            print("✅ 管理者ログイン成功")
+            print("管理者ログイン成功")
             return redirect(url_for('admin_dashboard'))
         else:
-            print("❌ 管理者ログイン失敗: 間違ったパスワード")
+            print("管理者ログイン失敗: 間違ったパスワード")
             return render_template('admin_login.html', error="パスワードが正しくありません")
     
     if session.get('admin_authenticated'):
@@ -113,10 +153,11 @@ def admin_login():
     return render_template('admin_login.html')
 
 @app.route("/admin/logout")
+@site_access_required
 def admin_logout():
     """管理者ログアウト"""
     session.pop('admin_authenticated', None)
-    print("✅ 管理者ログアウト")
+    print("管理者ログアウト")
     return redirect(url_for('search'))
 
 # 強化版CSV データ読み込み・処理クラス
@@ -131,7 +172,7 @@ class EnhancedTrendingDataManager:
             import MeCab
             self.mecab = MeCab.Tagger('-Owakati')
         except:
-            print("⚠️ MeCab初期化失敗。pip install mecab-python3 が必要です")
+            print("MeCab初期化失敗。pip install mecab-python3 が必要です")
             self.mecab = None
         
         self.load_csv()
@@ -146,12 +187,12 @@ class EnhancedTrendingDataManager:
                 for encoding in encodings:
                     try:
                         self.df = pd.read_csv(self.csv_path, encoding=encoding)
-                        print(f"✅ CSVファイル読み込み成功: {len(self.df)} 行 (エンコーディング: {encoding})")
-                        print(f"✅ 列数: {len(self.df.columns)} 列")
-                        print(f"✅ 映画タイトル数: {len(self.df.columns) - 1} 作品")  # date列を除く
+                        print(f"CSVファイル読み込み成功: {len(self.df)} 行 (エンコーディング: {encoding})")
+                        print(f"列数: {len(self.df.columns)} 列")
+                        print(f"映画タイトル数: {len(self.df.columns) - 1} 作品")  # date列を除く
                         
                         # CSVの構造を確認
-                        print("📊 CSVデータの構造:")
+                        print("CSVデータの構造:")
                         print(f"   - 日付範囲: {self.df['date'].min()} ～ {self.df['date'].max()}")
                         print(f"   - サンプル映画: {list(self.df.columns[1:6])}")  # 最初の5つの映画
                         
@@ -163,19 +204,19 @@ class EnhancedTrendingDataManager:
                     except UnicodeDecodeError:
                         continue
                     except Exception as e:
-                        print(f"❌ エンコーディング {encoding} で読み込み失敗: {e}")
+                        print(f"エンコーディング {encoding} で読み込み失敗: {e}")
                         continue
                 else:
-                    print("❌ すべてのエンコーディングで読み込みに失敗しました")
+                    print("すべてのエンコーディングで読み込みに失敗しました")
                     self.df = None
                     
             else:
-                print(f"❌ CSVファイルが見つかりません: {self.csv_path}")
-                print("📂 ファイルの存在確認をしてください")
+                print(f"CSVファイルが見つかりません: {self.csv_path}")
+                print("ファイルの存在確認をしてください")
                 self.df = None
                 
         except Exception as e:
-            print(f"❌ CSV読み込みエラー: {e}")
+            print(f"CSV読み込みエラー: {e}")
             self.df = None
     
     def import_to_database(self):
@@ -203,7 +244,7 @@ class EnhancedTrendingDataManager:
                         date_obj = datetime.strptime(date_str, '%Y-%m-%d')
                         date_str = date_obj.strftime('%Y-%m-%d')
                     except:
-                        print(f"⚠️ 日付形式エラー: {date_str}")
+                        print(f"日付形式エラー: {date_str}")
                         continue
                 
                 # 映画タイトルごとの投稿数を処理
@@ -229,12 +270,12 @@ class EnhancedTrendingDataManager:
                                 skipped_count += 1
                                 
                         except (ValueError, TypeError) as e:
-                            print(f"⚠️ データ変換エラー - {column}: {row[column]} -> {e}")
+                            print(f"データ変換エラー - {column}: {row[column]} -> {e}")
                             skipped_count += 1
                             continue
             
             db.session.commit()
-            print(f"✅ トレンドデータをデータベースに保存しました")
+            print(f"トレンドデータをデータベースに保存しました")
             print(f"   - インポート: {imported_count} 件")
             print(f"   - スキップ: {skipped_count} 件")
             
@@ -243,13 +284,13 @@ class EnhancedTrendingDataManager:
             unique_dates = db.session.query(TrendingData.date).distinct().count()
             unique_movies = db.session.query(TrendingData.movie_title).distinct().count()
             
-            print(f"📊 データベース統計:")
+            print(f"データベース統計:")
             print(f"   - 総レコード数: {total_records}")
             print(f"   - ユニーク日付数: {unique_dates}")
             print(f"   - ユニーク映画数: {unique_movies}")
             
         except Exception as e:
-            print(f"❌ データベース保存エラー: {e}")
+            print(f"データベース保存エラー: {e}")
             db.session.rollback()
     
     def get_trending_by_date(self, target_date=None, limit=10):
@@ -270,7 +311,7 @@ class EnhancedTrendingDataManager:
                                              .all()
             
             if not trending_list:
-                print(f"⚠️ 指定日 {target_date} のデータが見つかりません")
+                print(f"指定日 {target_date} のデータが見つかりません")
                 return []
             
             result = []
@@ -294,11 +335,11 @@ class EnhancedTrendingDataManager:
             for i in range(min(3, len(result))):
                 result[i]['word_cloud'] = self.scrape_eiga_com_reviews(result[i]['title'])
             
-            print(f"✅ {target_date} のトレンドデータ取得: {len(result)} 件")
+            print(f"{target_date} のトレンドデータ取得: {len(result)} 件")
             return result
             
         except Exception as e:
-            print(f"❌ トレンドデータ取得エラー: {e}")
+            print(f"トレンドデータ取得エラー: {e}")
             return []
     
     def find_movie_in_database_enhanced(self, title):
@@ -325,7 +366,7 @@ class EnhancedTrendingDataManager:
             return None
             
         except Exception as e:
-            print(f"❌ 映画検索エラー ({title}): {e}")
+            print(f"映画検索エラー ({title}): {e}")
             return None
     
     def format_movie_data(self, movie):
@@ -349,7 +390,7 @@ class EnhancedTrendingDataManager:
     def scrape_eiga_com_reviews(self, movie_title):
         """映画.comからレビューをスクレイピングしてワードクラウド生成"""
         try:
-            print(f"🔍 {movie_title} のレビューを取得中...")
+            print(f"{movie_title} のレビューを取得中...")
             
             # 映画.comの検索URL
             search_url = f"https://eiga.com/search/?query={quote(movie_title)}"
@@ -361,7 +402,7 @@ class EnhancedTrendingDataManager:
             # 検索ページにアクセス
             response = requests.get(search_url, headers=headers, timeout=10)
             if response.status_code != 200:
-                print(f"⚠️ 検索ページアクセス失敗: {response.status_code}")
+                print(f"検索ページアクセス失敗: {response.status_code}")
                 return self.generate_fallback_wordcloud(movie_title)
             
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -369,7 +410,7 @@ class EnhancedTrendingDataManager:
             # 映画詳細ページのリンクを取得
             movie_links = soup.find_all('a', href=re.compile(r'/movie/\d+/'))
             if not movie_links:
-                print(f"⚠️ {movie_title} の詳細ページが見つかりません")
+                print(f"{movie_title} の詳細ページが見つかりません")
                 return self.generate_fallback_wordcloud(movie_title)
             
             # 最初の映画詳細ページにアクセス
@@ -383,7 +424,7 @@ class EnhancedTrendingDataManager:
             # レビューページにアクセス
             review_response = requests.get(review_url, headers=headers, timeout=10)
             if review_response.status_code != 200:
-                print(f"⚠️ レビューページアクセス失敗: {review_response.status_code}")
+                print(f"レビューページアクセス失敗: {review_response.status_code}")
                 return self.generate_fallback_wordcloud(movie_title)
             
             review_soup = BeautifulSoup(review_response.content, 'html.parser')
@@ -398,7 +439,7 @@ class EnhancedTrendingDataManager:
                     review_texts.append(text)
             
             if not review_texts:
-                print(f"⚠️ {movie_title} のレビューテキストが見つかりません")
+                print(f"{movie_title} のレビューテキストが見つかりません")
                 return self.generate_fallback_wordcloud(movie_title)
             
             # レビューテキストを結合
@@ -407,11 +448,11 @@ class EnhancedTrendingDataManager:
             # ワードクラウド用のキーワード抽出
             keywords = self.extract_keywords_from_text(all_text)
             
-            print(f"✅ {movie_title} のレビューから {len(keywords)} 個のキーワードを抽出")
+            print(f"{movie_title} のレビューから {len(keywords)} 個のキーワードを抽出")
             return keywords[:8]  # 最大8個のワード
             
         except Exception as e:
-            print(f"❌ レビュー取得エラー ({movie_title}): {e}")
+            print(f"レビュー取得エラー ({movie_title}): {e}")
             return self.generate_fallback_wordcloud(movie_title)
     
     def extract_keywords_from_text(self, text):
@@ -472,7 +513,7 @@ class EnhancedTrendingDataManager:
             return keywords
             
         except Exception as e:
-            print(f"❌ キーワード抽出エラー: {e}")
+            print(f"キーワード抽出エラー: {e}")
             return []
     
     def generate_fallback_wordcloud(self, movie_title):
@@ -535,7 +576,7 @@ class EnhancedTrendingDataManager:
             return "-%"
             
         except Exception as e:
-            print(f"⚠️ 変化率計算エラー ({title}): {e}")
+            print(f"変化率計算エラー ({title}): {e}")
             return "-%"
     
     def get_available_dates(self):
@@ -544,7 +585,7 @@ class EnhancedTrendingDataManager:
             dates = db.session.query(TrendingData.date).distinct().order_by(desc(TrendingData.date)).all()
             return [date[0] for date in dates]
         except Exception as e:
-            print(f"❌ 日付取得エラー: {e}")
+            print(f"日付取得エラー: {e}")
             return []
 
 # データベース初期化関数
@@ -580,10 +621,10 @@ def init_database():
             
             try:
                 db.session.commit()
-                print("✅ サンプル記事データを作成しました")
+                print("サンプル記事データを作成しました")
             except Exception as e:
                 db.session.rollback()
-                print(f"❌ 記事データの作成に失敗: {e}")
+                print(f"記事データの作成に失敗: {e}")
 
 # グローバルインスタンス
 trending_manager = None
@@ -591,12 +632,12 @@ trending_manager = None
 def init_trending_manager():
     """強化版トレンドマネージャーの初期化"""
     global trending_manager
-    print("🔄 強化版トレンドデータマネージャーを初期化中...")
+    print("強化版トレンドデータマネージャーを初期化中...")
     trending_manager = EnhancedTrendingDataManager(app)
     if trending_manager.df is not None:
-        print("✅ 強化版トレンドデータマネージャーの初期化完了")
+        print("強化版トレンドデータマネージャーの初期化完了")
     else:
-        print("❌ 強化版トレンドデータマネージャーの初期化に失敗")
+        print("強化版トレンドデータマネージャーの初期化に失敗")
 
 # AIチャットボット機能
 class MovieAnalysisBot:
@@ -632,6 +673,7 @@ class MovieAnalysisBot:
 # ===== ルート定義 =====
 
 @app.route("/api/search-suggestions")
+@site_access_required
 def search_suggestions():
     query_type = request.args.get('type')
     term = request.args.get('term', '').strip()
@@ -681,41 +723,48 @@ def search_suggestions():
 
 @app.route("/")
 @app.route("/search")
+@site_access_required
 def search():
     query = Movie.query
 
-    year = request.args.get('year')
+    # 基本検索パラメータ
     title = request.args.get('title')
-    distributor = request.args.get('distributor')
-    min_revenue = request.args.get('min_revenue')
-    max_revenue = request.args.get('max_revenue')
     director = request.args.get('director')
     actor = request.args.get('actor')
-    scriptwriter = request.args.get('scriptwriter')
-    producer = request.args.get('producer')
-    genre = request.args.get('genre')  # ジャンル検索追加
+    distributor = request.args.get('distributor')
     category = request.args.get('category')
+    min_revenue = request.args.get('min_revenue')
+    max_revenue = request.args.get('max_revenue')
+    
+    # 新しい検索パラメータ
+    years = request.args.getlist('years')
+    genres = request.args.getlist('genres')
+    year_match = request.args.get('year_match', 'any')
+    genre_match = request.args.get('genre_match', 'any')
+    
     order_by = request.args.get('order_by', 'revenue')
     sort = request.args.get('sort', 'desc')
 
-    if year:
-        query = query.filter(Movie.year == year)
+    # 基本フィルタリング
     if title:
         query = query.filter(Movie.title.contains(title))
-
-    # 配給会社のエイリアス処理
-    groups = [
-        ['WB', 'ワーナー', 'ワーナー・ブラザース映画'],
-        ['SPE', 'ソニー・ピクチャーズエンタテインメント'],
-        ['BV', 'WDS', 'ウォルト・ディズニー・ジャパン', 'ブエナビスタ', 'ディズニー']
-    ]
-
-    distributor_aliases = {}
-    for group in groups:
-        for term in group:
-            distributor_aliases[term.upper()] = group
-
+    if director:
+        query = query.filter(Movie.director.contains(director))
+    if actor:
+        query = query.filter(Movie.actor.contains(actor))
     if distributor:
+        # 配給会社のエイリアス処理
+        groups = [
+            ['WB', 'ワーナー', 'ワーナー・ブラザース映画'],
+            ['SPE', 'ソニー・ピクチャーズエンタテインメント'],
+            ['BV', 'WDS', 'ウォルト・ディズニー・ジャパン', 'ブエナビスタ', 'ディズニー']
+        ]
+
+        distributor_aliases = {}
+        for group in groups:
+            for term in group:
+                distributor_aliases[term.upper()] = group
+
         patterns = distributor_aliases.get(distributor.upper(), [distributor])
         conditions = []
         for pattern in patterns:
@@ -731,38 +780,53 @@ def search():
     if category:
         query = query.filter(Movie.category == category)
     
-    # ジャンル検索処理を追加
-    if genre:
-        # 複数のジャンルが含まれる可能性があるため、LIKE検索を使用
-        query = query.filter(
-            or_(
-                Movie.genre.like(f"%{genre}%"),
-                Movie.genre.like(f"{genre},%"),
-                Movie.genre.like(f"%, {genre},%"),
-                Movie.genre.like(f"%, {genre}"),
-                Movie.genre == genre
-            )
-        )
-    
     if min_revenue:
         query = query.filter(Movie.revenue >= float(min_revenue))
     if max_revenue:
         query = query.filter(Movie.revenue <= float(max_revenue))
-    if director:
-        query = query.filter(Movie.director.contains(director))
-    if actor:
-        query = query.filter(Movie.actor.contains(actor))
-    if scriptwriter:
-        query = query.filter(Movie.scriptwriter.contains(scriptwriter))
-    if producer:
-        query = query.filter(Movie.producer.contains(producer))
+
+    # 年検索の処理
+    if years:
+        year_conditions = []
+        if year_match == 'range' and len(years) >= 2:
+            # 範囲指定の場合
+            min_year = min([int(y) for y in years])
+            max_year = max([int(y) for y in years])
+            query = query.filter(Movie.year >= min_year, Movie.year <= max_year)
+        else:
+            # 指定年のいずれかの場合
+            year_conditions = [Movie.year == int(year) for year in years]
+            query = query.filter(or_(*year_conditions))
+
+    # ジャンル検索の処理
+    if genres:
+        genre_conditions = []
+        for genre in genres:
+            genre_conditions.append(
+                or_(
+                    Movie.genre.like(f"%{genre}%"),
+                    Movie.genre.like(f"{genre},%"),
+                    Movie.genre.like(f"%, {genre},%"),
+                    Movie.genre.like(f"%, {genre}"),
+                    Movie.genre == genre
+                )
+            )
+        
+        if genre_match == 'all':
+            # AND検索（完全一致）
+            for condition in genre_conditions:
+                query = query.filter(condition)
+        else:
+            # OR検索（一部一致）
+            query = query.filter(or_(*genre_conditions))
 
     movies = query.all()
 
+    # ソート処理
     if movies:
         if order_by == 'release_date':
             movies.sort(key=lambda m: parse_date(m.release_date), reverse=(sort == 'desc'))
-        elif order_by == 'genre':  # ジャンルソート追加
+        elif order_by == 'genre':
             movies.sort(key=lambda m: m.genre or '', reverse=(sort == 'desc'))
         elif hasattr(Movie, order_by):
             sample = getattr(movies[0], order_by, '')
@@ -771,6 +835,7 @@ def search():
             else:
                 movies.sort(key=lambda m: getattr(m, order_by) or '', reverse=(sort == 'desc'))
 
+    # ページネーション
     page = request.args.get(get_page_parameter(), type=int, default=1)
     per_page = 20
     start = (page - 1) * per_page
@@ -801,31 +866,41 @@ def search():
     )
 
 @app.route("/movie/<int:movie_id>")
+@site_access_required
 def movie_detail(movie_id):
     movie = Movie.query.filter_by(id=movie_id).first_or_404()
     return render_template("movie_detail.html", movie=movie)
 
 @app.route("/table")
+@site_access_required
 def table_view():
     query = Movie.query
 
-    year = request.args.get('year')
+    # 基本検索パラメータ
     title = request.args.get('title')
-    distributor = request.args.get('distributor')
-    min_revenue = request.args.get('min_revenue')
-    max_revenue = request.args.get('max_revenue')
     director = request.args.get('director')
     actor = request.args.get('actor')
-    scriptwriter = request.args.get('scriptwriter')
-    producer = request.args.get('producer')
-    genre = request.args.get('genre')  # ジャンル検索追加
+    distributor = request.args.get('distributor')
+    category = request.args.get('category')
+    min_revenue = request.args.get('min_revenue')
+    max_revenue = request.args.get('max_revenue')
+    
+    # 新しい検索パラメータ
+    years = request.args.getlist('years')
+    genres = request.args.getlist('genres')
+    year_match = request.args.get('year_match', 'any')
+    genre_match = request.args.get('genre_match', 'any')
+    
     order_by = request.args.get('order_by', 'release_date')
     sort = request.args.get('sort', 'desc')
 
-    if year:
-        query = query.filter(Movie.year == year)
+    # 基本フィルタリング（search関数と同じロジック）
     if title:
         query = query.filter(Movie.title.contains(title))
+    if director:
+        query = query.filter(Movie.director.contains(director))
+    if actor:
+        query = query.filter(Movie.actor.contains(actor))
     if distributor:
         query = query.filter(
             or_(
@@ -836,36 +911,48 @@ def table_view():
                 Movie.distributor.like(f"%{distributor}%")
             )
         )
-    
-    # ジャンル検索処理を追加
-    if genre:
-        query = query.filter(
-            or_(
-                Movie.genre.like(f"%{genre}%"),
-                Movie.genre.like(f"{genre},%"),
-                Movie.genre.like(f"%, {genre},%"),
-                Movie.genre.like(f"%, {genre}"),
-                Movie.genre == genre
-            )
-        )
-    
+    if category:
+        query = query.filter(Movie.category == category)
     if min_revenue:
         query = query.filter(Movie.revenue >= float(min_revenue))
     if max_revenue:
         query = query.filter(Movie.revenue <= float(max_revenue))
-    if director:
-        query = query.filter(Movie.director.contains(director))
-    if actor:
-        query = query.filter(Movie.actor.contains(actor))
-    if scriptwriter:
-        query = query.filter(Movie.scriptwriter.contains(scriptwriter))
-    if producer:
-        query = query.filter(Movie.producer.contains(producer))
 
+    # 年検索の処理
+    if years:
+        if year_match == 'range' and len(years) >= 2:
+            min_year = min([int(y) for y in years])
+            max_year = max([int(y) for y in years])
+            query = query.filter(Movie.year >= min_year, Movie.year <= max_year)
+        else:
+            year_conditions = [Movie.year == int(year) for year in years]
+            query = query.filter(or_(*year_conditions))
+
+    # ジャンル検索の処理
+    if genres:
+        genre_conditions = []
+        for genre in genres:
+            genre_conditions.append(
+                or_(
+                    Movie.genre.like(f"%{genre}%"),
+                    Movie.genre.like(f"{genre},%"),
+                    Movie.genre.like(f"%, {genre},%"),
+                    Movie.genre.like(f"%, {genre}"),
+                    Movie.genre == genre
+                )
+            )
+        
+        if genre_match == 'all':
+            for condition in genre_conditions:
+                query = query.filter(condition)
+        else:
+            query = query.filter(or_(*genre_conditions))
+
+    # ソート処理
     if order_by == 'release_date':
         movies = query.all()
         movies.sort(key=lambda m: parse_date(m.release_date), reverse=(sort == 'desc'))
-    elif order_by == 'genre':  # ジャンルソート追加
+    elif order_by == 'genre':
         movies = query.all()
         movies.sort(key=lambda m: m.genre or '', reverse=(sort == 'desc'))
     elif hasattr(Movie, order_by):
@@ -878,6 +965,7 @@ def table_view():
     else:
         movies = query.all()
 
+    # ページネーション
     page = request.args.get(get_page_parameter(), type=int, default=1)
     per_page = 50
     start = (page - 1) * per_page
@@ -906,6 +994,7 @@ def table_view():
 # ===== 新機能のルート =====
 
 @app.route("/articles")
+@site_access_required
 def articles():
     page = request.args.get('page', 1, type=int)
     category = request.args.get('category')
@@ -928,6 +1017,7 @@ def articles():
     return render_template('articles.html', articles=articles, categories=categories, current_category=category)
 
 @app.route("/articles/<int:article_id>")
+@site_access_required
 def article_detail(article_id):
     article = Article.query.get_or_404(article_id)
     article.view_count += 1
@@ -941,10 +1031,12 @@ def article_detail(article_id):
     return render_template('article_detail.html', article=article, related_articles=related_articles)
 
 @app.route("/chat")
+@site_access_required
 def movie_chat():
     return render_template('movie_chat.html')
 
 @app.route("/api/chat", methods=['POST'])
+@site_access_required
 def chat_api():
     try:
         data = request.get_json()
@@ -980,6 +1072,7 @@ def chat_api():
 # ===== SNSトレンド機能（強化版） =====
 
 @app.route("/trending")
+@site_access_required
 def sns_ranking():
     """SNSランキングページ（TOP10、画像連携、実際のレビュー対応版）"""
     global trending_manager
@@ -1010,6 +1103,7 @@ def sns_ranking():
                          selected_date=selected_date)
 
 @app.route("/api/trending-update")
+@site_access_required
 def trending_update():
     """トレンドデータ更新API"""
     global trending_manager
@@ -1023,6 +1117,7 @@ def trending_update():
     return jsonify(trending_movies)
 
 @app.route("/api/word-cloud/<movie_title>")
+@site_access_required
 def word_cloud_api(movie_title):
     """ワードクラウドAPI（リアルタイム取得）"""
     global trending_manager
@@ -1036,6 +1131,7 @@ def word_cloud_api(movie_title):
 # ===== 記事管理機能 =====
 
 @app.route("/admin")
+@site_access_required
 @admin_required
 def admin_dashboard():
     """管理者ダッシュボード"""
@@ -1076,6 +1172,7 @@ def admin_dashboard():
         )
 
 @app.route("/admin/articles")
+@site_access_required
 @admin_required
 def admin_articles():
     """記事一覧管理"""
@@ -1116,6 +1213,7 @@ def admin_articles():
     )
 
 @app.route("/admin/articles/new", methods=['GET', 'POST'])
+@site_access_required
 @admin_required
 def admin_create_article():
     """新規記事作成"""
@@ -1157,11 +1255,11 @@ def admin_create_article():
             db.session.add(article)
             db.session.commit()
             
-            print(f"✅ 新規記事作成: {title}")
+            print(f"新規記事作成: {title}")
             return redirect(url_for('admin_articles'))
             
         except Exception as e:
-            print(f"❌ 記事作成エラー: {e}")
+            print(f"記事作成エラー: {e}")
             db.session.rollback()
             return render_template('admin_article_form.html', 
                 error=f"記事の作成に失敗しました: {str(e)}",
@@ -1177,6 +1275,7 @@ def admin_create_article():
     )
 
 @app.route("/admin/articles/<int:article_id>/edit", methods=['GET', 'POST'])
+@site_access_required
 @admin_required
 def admin_edit_article(article_id):
     """記事編集"""
@@ -1207,11 +1306,11 @@ def admin_edit_article(article_id):
             
             db.session.commit()
             
-            print(f"✅ 記事更新: {article.title}")
+            print(f"記事更新: {article.title}")
             return redirect(url_for('admin_articles'))
             
         except Exception as e:
-            print(f"❌ 記事更新エラー: {e}")
+            print(f"記事更新エラー: {e}")
             db.session.rollback()
             return render_template('admin_article_form.html', 
                 error=f"記事の更新に失敗しました: {str(e)}",
@@ -1227,6 +1326,7 @@ def admin_edit_article(article_id):
     )
 
 @app.route("/admin/articles/<int:article_id>/delete", methods=['POST'])
+@site_access_required
 @admin_required
 def admin_delete_article(article_id):
     """記事削除"""
@@ -1237,15 +1337,16 @@ def admin_delete_article(article_id):
         db.session.delete(article)
         db.session.commit()
         
-        print(f"✅ 記事削除: {title}")
+        print(f"記事削除: {title}")
         return jsonify({'success': True, 'message': '記事を削除しました'})
         
     except Exception as e:
-        print(f"❌ 記事削除エラー: {e}")
+        print(f"記事削除エラー: {e}")
         db.session.rollback()
         return jsonify({'success': False, 'message': f'削除に失敗しました: {str(e)}'})
 
 @app.route("/admin/articles/<int:article_id>/toggle-featured", methods=['POST'])
+@site_access_required
 @admin_required
 def admin_toggle_featured(article_id):
     """注目記事の切り替え"""
@@ -1256,7 +1357,7 @@ def admin_toggle_featured(article_id):
         db.session.commit()
         
         status = "注目記事に設定" if article.is_featured else "注目記事を解除"
-        print(f"✅ {article.title}: {status}")
+        print(f"{article.title}: {status}")
         
         return jsonify({
             'success': True, 
@@ -1265,22 +1366,22 @@ def admin_toggle_featured(article_id):
         })
         
     except Exception as e:
-        print(f"❌ 注目記事切り替えエラー: {e}")
+        print(f"注目記事切り替えエラー: {e}")
         db.session.rollback()
         return jsonify({'success': False, 'message': f'切り替えに失敗しました: {str(e)}'})
 
 
 if __name__ == "__main__":
-    print("🚀 映画データベース アプリケーション起動中...")
-    print(f"📁 CSVファイルパス: C:\\Users\\2501016\\Box\\0000_マイフォルダ\\自習用\\python\\Yahooリアルタイム検索\\20250710更新_ポスト数集計.csv")
+    print("映画データベース アプリケーション起動中...")
+    print(f"CSVファイルパス: C:\\Users\\2501016\\Box\\0000_マイフォルダ\\自習用\\movie_app ver.2\\20250710更新_ポスト数集計.csv")
     
     # アプリケーション起動時にデータベースとトレンドマネージャーを初期化
     init_database()
     init_trending_manager()
     
-    # 🔽 ここでデータベースのテーブルを作成
+    # データベースのテーブルを作成
     with app.app_context():
         db.create_all()
     
-    print("✅ 初期化完了！ブラウザで http://localhost:5000 にアクセスしてください")
+    print("初期化完了！ブラウザで http://localhost:5000 にアクセスしてください")
     app.run(host='0.0.0.0', port=5000, debug=True)
