@@ -166,9 +166,10 @@
                        required
                        autofocus>
             </div>
+            <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
 
             <button type="submit" class="login-btn">
-                サイトにアクセス
+        サイトにアクセス
             </button>
         </form>
 
