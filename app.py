@@ -32,6 +32,9 @@ def parse_date(s):
         return datetime.min 
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///movie_new.db'
+app.config['SQLALCHEMY_BINDS'] = {
+    'trending': 'sqlite:///trending_data.db'
+}
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -78,6 +81,7 @@ class ChatMessage(db.Model):
 
 class TrendingData(db.Model):
     """SNS投稿数データを保存するテーブル"""
+    __bind_key__ = 'trending'  # 専用データベースを指定
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.String(20), nullable=False)
     movie_title = db.Column(db.String(200), nullable=False)
@@ -162,13 +166,10 @@ def admin_logout():
     print("管理者ログアウト")
     return redirect(url_for('search'))
 
-# 強化版CSV データ読み込み・処理クラス
-class EnhancedTrendingDataManager:
+# 簡素化版 TrendingDataManager クラス
+class TrendingDataManager:
     def __init__(self, app_instance):
         self.app = app_instance
-        # 指定されたCSVパス
-        self.csv_path = r"C:\Users\2501016\Box\0000_マイフォルダ\自習用\movie_app ver.2\20250710更新_ポスト数集計.csv"
-        self.df = None
         # MeCabの初期化（形態素解析用）
         try:
             import MeCab
@@ -177,123 +178,7 @@ class EnhancedTrendingDataManager:
             print("MeCab初期化失敗。pip install mecab-python3 が必要です")
             self.mecab = None
         
-        self.load_csv()
-    
-    def load_csv(self):
-        """CSVファイルを読み込み"""
-        try:
-            if os.path.exists(self.csv_path):
-                # 複数のエンコーディングを試行
-                encodings = ['utf-8', 'shift_jis', 'cp932', 'utf-8-sig']
-                
-                for encoding in encodings:
-                    try:
-                        self.df = pd.read_csv(self.csv_path, encoding=encoding)
-                        print(f"CSVファイル読み込み成功: {len(self.df)} 行 (エンコーディング: {encoding})")
-                        print(f"列数: {len(self.df.columns)} 列")
-                        print(f"映画タイトル数: {len(self.df.columns) - 1} 作品")  # date列を除く
-                        
-                        # CSVの構造を確認
-                        print("CSVデータの構造:")
-                        print(f"   - 日付範囲: {self.df['date'].min()} ～ {self.df['date'].max()}")
-                        print(f"   - サンプル映画: {list(self.df.columns[1:6])}")  # 最初の5つの映画
-                        
-                        # アプリケーションコンテキスト内でデータベース操作を実行
-                        with self.app.app_context():
-                            self.import_to_database()
-                        break
-                        
-                    except UnicodeDecodeError:
-                        continue
-                    except Exception as e:
-                        print(f"エンコーディング {encoding} で読み込み失敗: {e}")
-                        continue
-                else:
-                    print("すべてのエンコーディングで読み込みに失敗しました")
-                    self.df = None
-                    
-            else:
-                print(f"CSVファイルが見つかりません: {self.csv_path}")
-                print("ファイルの存在確認をしてください")
-                self.df = None
-                
-        except Exception as e:
-            print(f"CSV読み込みエラー: {e}")
-            self.df = None
-    
-    def import_to_database(self):
-        """CSVデータをデータベースに保存（アプリケーションコンテキスト内で実行）"""
-        if self.df is None:
-            return
-        
-        try:
-            # 既存のトレンドデータを削除
-            TrendingData.query.delete()
-            
-            imported_count = 0
-            skipped_count = 0
-            
-            for _, row in self.df.iterrows():
-                date_str = str(row['date'])
-                
-                # 日付形式を統一（YYYY-MM-DD形式に変換）
-                try:
-                    if '/' in date_str:
-                        date_obj = datetime.strptime(date_str, '%Y/%m/%d')
-                        date_str = date_obj.strftime('%Y-%m-%d')
-                except:
-                    try:
-                        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                        date_str = date_obj.strftime('%Y-%m-%d')
-                    except:
-                        print(f"日付形式エラー: {date_str}")
-                        continue
-                
-                # 映画タイトルごとの投稿数を処理
-                for column in self.df.columns:
-                    if column != 'date':
-                        try:
-                            # NaN や空値をチェック
-                            if pd.notna(row[column]) and str(row[column]).strip() != '':
-                                post_count = float(row[column])
-                                post_count = int(post_count) if not pd.isna(post_count) else 0
-                                
-                                if post_count > 0:  # 投稿数が0より大きい場合のみ保存
-                                    trending_data = TrendingData(
-                                        date=date_str,
-                                        movie_title=column,
-                                        post_count=post_count
-                                    )
-                                    db.session.add(trending_data)
-                                    imported_count += 1
-                                else:
-                                    skipped_count += 1
-                            else:
-                                skipped_count += 1
-                                
-                        except (ValueError, TypeError) as e:
-                            print(f"データ変換エラー - {column}: {row[column]} -> {e}")
-                            skipped_count += 1
-                            continue
-            
-            db.session.commit()
-            print(f"トレンドデータをデータベースに保存しました")
-            print(f"   - インポート: {imported_count} 件")
-            print(f"   - スキップ: {skipped_count} 件")
-            
-            # 保存されたデータの確認
-            total_records = TrendingData.query.count()
-            unique_dates = db.session.query(TrendingData.date).distinct().count()
-            unique_movies = db.session.query(TrendingData.movie_title).distinct().count()
-            
-            print(f"データベース統計:")
-            print(f"   - 総レコード数: {total_records}")
-            print(f"   - ユニーク日付数: {unique_dates}")
-            print(f"   - ユニーク映画数: {unique_movies}")
-            
-        except Exception as e:
-            print(f"データベース保存エラー: {e}")
-            db.session.rollback()
+        print("TrendingDataManager初期化完了（データベース利用版）")
     
     def get_trending_by_date(self, target_date=None, limit=10):
         """指定日のトップ10トレンドデータを取得"""
@@ -318,7 +203,7 @@ class EnhancedTrendingDataManager:
             
             result = []
             for i, trend in enumerate(trending_list, 1):
-                # データベースから映画情報を検索（強化版）
+                # データベースから映画情報を検索
                 movie_data = self.find_movie_in_database_enhanced(trend.movie_title)
                 
                 trend_info = {
@@ -333,9 +218,9 @@ class EnhancedTrendingDataManager:
                 }
                 result.append(trend_info)
             
-            # 上位3位のワードクラウドを生成
+            # 上位3位のワードクラウドを生成（簡略版）
             for i in range(min(3, len(result))):
-                result[i]['word_cloud'] = self.scrape_eiga_com_reviews(result[i]['title'])
+                result[i]['word_cloud'] = self.generate_fallback_wordcloud(result[i]['title'])
             
             print(f"{target_date} のトレンドデータ取得: {len(result)} 件")
             return result
@@ -345,24 +230,22 @@ class EnhancedTrendingDataManager:
             return []
     
     def find_movie_in_database_enhanced(self, title):
-        """映画データベースから映画情報を検索（画像ID考慮）"""
+        """映画データベースから映画情報を検索"""
         try:
             # 1. 完全一致検索
             movie = Movie.query.filter(Movie.title == title).first()
             if movie:
                 return self.format_movie_data(movie)
             
-            # 2. 部分一致検索（映画データベースのタイトルが含まれる）
+            # 2. 部分一致検索
+            movie = Movie.query.filter(Movie.title.contains(title)).first()
+            if movie:
+                return self.format_movie_data(movie)
+            
+            # 3. 逆方向の部分一致検索
             movies = Movie.query.all()
             for movie in movies:
-                if movie.title in title or title in movie.title:
-                    return self.format_movie_data(movie)
-            
-            # 3. キーワードマッチング
-            title_clean = re.sub(r'[^\w\s]', '', title)
-            for movie in movies:
-                movie_clean = re.sub(r'[^\w\s]', '', movie.title)
-                if self.calculate_similarity(title_clean, movie_clean) > 0.7:
+                if movie.title and (movie.title in title or title in movie.title):
                     return self.format_movie_data(movie)
             
             return None
@@ -372,10 +255,10 @@ class EnhancedTrendingDataManager:
             return None
     
     def format_movie_data(self, movie):
-        """映画データを整形（ポスター画像パス含む）"""
+        """映画データを整形"""
         return {
             'id': movie.id,
-            'movie_id': movie.movie_id,  # ポスター画像用ID
+            'movie_id': movie.movie_id,
             'title': movie.title,
             'revenue': movie.revenue,
             'year': movie.year,
@@ -384,153 +267,18 @@ class EnhancedTrendingDataManager:
             'poster_path': f"posters/{movie.movie_id}.jpg" if movie.movie_id else None
         }
     
-    def calculate_similarity(self, str1, str2):
-        """文字列の類似度を計算"""
-        from difflib import SequenceMatcher
-        return SequenceMatcher(None, str1.lower(), str2.lower()).ratio()
-    
-    def scrape_eiga_com_reviews(self, movie_title):
-        """映画.comからレビューをスクレイピングしてワードクラウド生成"""
-        try:
-            print(f"{movie_title} のレビューを取得中...")
-            
-            # 映画.comの検索URL
-            search_url = f"https://eiga.com/search/?query={quote(movie_title)}"
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            
-            # 検索ページにアクセス
-            response = requests.get(search_url, headers=headers, timeout=10)
-            if response.status_code != 200:
-                print(f"検索ページアクセス失敗: {response.status_code}")
-                return self.generate_fallback_wordcloud(movie_title)
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # 映画詳細ページのリンクを取得
-            movie_links = soup.find_all('a', href=re.compile(r'/movie/\d+/'))
-            if not movie_links:
-                print(f"{movie_title} の詳細ページが見つかりません")
-                return self.generate_fallback_wordcloud(movie_title)
-            
-            # 最初の映画詳細ページにアクセス
-            movie_url = "https://eiga.com" + movie_links[0]['href']
-            
-            # レビューページのURLを構築
-            review_url = movie_url.replace('/movie/', '/movie/') + 'review/'
-            
-            time.sleep(1)  # リクエスト間隔を空ける
-            
-            # レビューページにアクセス
-            review_response = requests.get(review_url, headers=headers, timeout=10)
-            if review_response.status_code != 200:
-                print(f"レビューページアクセス失敗: {review_response.status_code}")
-                return self.generate_fallback_wordcloud(movie_title)
-            
-            review_soup = BeautifulSoup(review_response.content, 'html.parser')
-            
-            # レビューテキストを抽出
-            review_texts = []
-            review_elements = review_soup.find_all(['div', 'p'], class_=re.compile(r'review|comment|text'))
-            
-            for element in review_elements:
-                text = element.get_text(strip=True)
-                if len(text) > 10:  # 短すぎるテキストは除外
-                    review_texts.append(text)
-            
-            if not review_texts:
-                print(f"{movie_title} のレビューテキストが見つかりません")
-                return self.generate_fallback_wordcloud(movie_title)
-            
-            # レビューテキストを結合
-            all_text = ' '.join(review_texts[:10])  # 最大10件のレビュー
-            
-            # ワードクラウド用のキーワード抽出
-            keywords = self.extract_keywords_from_text(all_text)
-            
-            print(f"{movie_title} のレビューから {len(keywords)} 個のキーワードを抽出")
-            return keywords[:8]  # 最大8個のワード
-            
-        except Exception as e:
-            print(f"レビュー取得エラー ({movie_title}): {e}")
-            return self.generate_fallback_wordcloud(movie_title)
-    
-    def extract_keywords_from_text(self, text):
-        """テキストからキーワードを抽出"""
-        try:
-            # 不要な文字を除去
-            text = re.sub(r'[^\w\s]', ' ', text)
-            text = re.sub(r'\s+', ' ', text).strip()
-            
-            if self.mecab:
-                # MeCabで形態素解析
-                parsed = self.mecab.parse(text)
-                words = parsed.strip().split()
-            else:
-                # 単純な分割（フォールバック）
-                words = text.split()
-            
-            # ストップワードを除外
-            stop_words = {
-                'これ', 'それ', 'あれ', 'この', 'その', 'あの', 'ここ', 'そこ', 'あそこ',
-                'こんな', 'そんな', 'あんな', 'どの', 'いい', 'よい', 'いる', 'ある', 'する',
-                'です', 'である', 'だった', 'でした', '映画', 'film', 'movie', 'cinema',
-                'とても', 'すごく', 'かなり', 'もう', 'まだ', 'また', 'やはり', 'きっと',
-                'ちょっと', 'なんか', 'やっぱり', '本当', '本当に', '本当は', '実際',
-                '思う', '思った', '思える', '感じ', '感じる', '感じた', '見る', '見た', '観る', '観た'
-            }
-            
-            # 有効な単語のみを抽出（2文字以上、ひらがなのみ除外）
-            valid_words = []
-            for word in words:
-                if (len(word) >= 2 and 
-                    word not in stop_words and 
-                    not re.match(r'^[ひらがな]+$', word) and
-                    not word.isdigit()):
-                    valid_words.append(word)
-            
-            # 頻度カウント
-            word_counts = Counter(valid_words)
-            
-            # 上位キーワードを抽出
-            top_words = word_counts.most_common(12)
-            
-            # ワードクラウド用フォーマット
-            keywords = []
-            colors = ['#1a73e8', '#34a853', '#ea4335', '#fbbc04', '#9c27b0', '#ff6f00', '#00acc1', '#43a047']
-            
-            for i, (word, count) in enumerate(top_words):
-                size = max(14, 28 - (i * 2))
-                color = colors[i % len(colors)]
-                
-                keywords.append({
-                    'text': word,
-                    'size': size,
-                    'color': color,
-                    'count': count
-                })
-            
-            return keywords
-            
-        except Exception as e:
-            print(f"キーワード抽出エラー: {e}")
-            return []
-    
     def generate_fallback_wordcloud(self, movie_title):
         """フォールバック用ワードクラウド（映画タイトルベース）"""
         word_templates = {
             '鬼滅の刃': ['感動', '泣いた', '最高', '劇場版', 'アニメ', '無限列車', '炭治郎', '禰豆子'],
             'ミッション': ['アクション', 'トム・クルーズ', 'スタント', 'ハラハラ', '迫力', 'スパイ'],
             'スーパーマン': ['ヒーロー', 'DC', 'アメコミ', '飛行', '正義', 'クラーク'],
-            'ルパン': ['次元', '五ェ門', '不二子', '銭形', '泥棒', 'カリオストロ'],
+            'ルパン': ['次元', '五右衛門', '不二子', '銭形', '泥棒', 'カリオストロ'],
             'しんちゃん': ['家族', 'しんのすけ', 'ひろし', 'みさえ', '春日部', '面白い'],
             'アンパンマン': ['アンパンマン', '子供', 'ばいきんまん', 'ジャムおじさん', '正義'],
             'ジュラシック': ['恐竜', 'ティラノサウルス', 'ラプトル', 'パーク', '迫力'],
-            'スパイダーマン': ['スパイダー', 'ヒーロー', 'ウェブ', 'ピーター', 'マーベル'],
-            'アベンジャーズ': ['ヒーロー', 'マーベル', 'アイアンマン', 'キャプテン', '最強'],
-            'ワンピース': ['ルフィ', '海賊', '仲間', '冒険', 'アニメ', '感動']
+            'BAD BOYS': ['アクション', 'コメディ', 'マイアミ', 'バディ', '爆発'],
+            'スティッチ': ['ディズニー', 'ハワイ', '家族', 'かわいい', '感動']
         }
         
         # 映画タイトルに含まれるキーワードでマッチング
@@ -559,9 +307,9 @@ class EnhancedTrendingDataManager:
         """前日との変化率を計算"""
         try:
             # 日付の形式を統一
-            current_date_obj = datetime.strptime(current_date, '%Y-%m-%d') if '-' in current_date else datetime.strptime(current_date, '%Y/%m/%d')
+            current_date_obj = datetime.strptime(current_date, '%Y/%m/%d')
             prev_date_obj = current_date_obj - timedelta(days=1)
-            prev_date = prev_date_obj.strftime('%Y-%m-%d')
+            prev_date = prev_date_obj.strftime('%Y/%m/%d')
             
             current_data = TrendingData.query.filter_by(date=current_date, movie_title=title).first()
             prev_data = TrendingData.query.filter_by(date=prev_date, movie_title=title).first()
@@ -632,14 +380,11 @@ def init_database():
 trending_manager = None
 
 def init_trending_manager():
-    """強化版トレンドマネージャーの初期化"""
+    """トレンドマネージャーの初期化（データベース利用版）"""
     global trending_manager
-    print("強化版トレンドデータマネージャーを初期化中...")
-    trending_manager = EnhancedTrendingDataManager(app)
-    if trending_manager.df is not None:
-        print("強化版トレンドデータマネージャーの初期化完了")
-    else:
-        print("強化版トレンドデータマネージャーの初期化に失敗")
+    print("TrendingDataManager を初期化中...")
+    trending_manager = TrendingDataManager(app)
+    print("TrendingDataManager の初期化完了")
 
 # AIチャットボット機能
 class MovieAnalysisBot:
@@ -978,6 +723,10 @@ def table_view():
     has_prev = page > 1
     has_next = page < total_pages
 
+# args_no_page を追加
+    args_no_page = request.args.to_dict()
+    args_no_page.pop("page", None)
+
     return render_template("table_view.html", 
         movies=pagination_items, 
         order_by=order_by, 
@@ -990,9 +739,9 @@ def table_view():
             'prev_num': page - 1,
             'next_num': page + 1
         },
+        args_no_page=args_no_page,
         total_results=len(movies)
     )
-
 # ===== 新機能のルート =====
 
 @app.route("/articles")
@@ -1076,18 +825,18 @@ def chat_api():
 @app.route("/trending")
 @site_access_required
 def sns_ranking():
-    """SNSランキングページ（TOP10、画像連携、実際のレビュー対応版）"""
+    """SNSランキングページ（データベース利用版）"""
     global trending_manager
     
     # 日付パラメータの取得
     selected_date = request.args.get('date')
     
-    if trending_manager is None or trending_manager.df is None:
+    if trending_manager is None:
         return render_template('sns_ranking.html', 
                              trending_movies=[], 
                              available_dates=[], 
                              selected_date=None,
-                             error="CSVデータが読み込まれていません。ファイルパスを確認してください。")
+                             error="トレンドマネージャーが初期化されていません。")
     
     # 利用可能な日付を取得
     available_dates = trending_manager.get_available_dates()
@@ -1121,13 +870,14 @@ def trending_update():
 @app.route("/api/word-cloud/<movie_title>")
 @site_access_required
 def word_cloud_api(movie_title):
-    """ワードクラウドAPI（リアルタイム取得）"""
+    """ワードクラウドAPI（フォールバック版）"""
     global trending_manager
     
     if trending_manager is None:
         return jsonify([])
     
-    word_cloud_data = trending_manager.scrape_eiga_com_reviews(movie_title)
+    # フォールバック用ワードクラウドを生成
+    word_cloud_data = trending_manager.generate_fallback_wordcloud(movie_title)
     return jsonify(word_cloud_data)
 
 # ===== 記事管理機能 =====
@@ -1375,15 +1125,17 @@ def admin_toggle_featured(article_id):
 
 if __name__ == "__main__":
     print("映画データベース アプリケーション起動中...")
-    print(f"CSVファイルパス: C:\\Users\\2501016\\Box\\0000_マイフォルダ\\自習用\\movie_app ver.2\\20250710更新_ポスト数集計.csv")
     
-    # アプリケーション起動時にデータベースとトレンドマネージャーを初期化
-    init_database()
-    init_trending_manager()
-    
-    # データベースのテーブルを作成
+    # データベースのテーブルを最初に作成
     with app.app_context():
         db.create_all()
+        print("データベーステーブル作成完了")
+    
+    # データベース初期化
+    init_database()
+    
+    # トレンドマネージャー初期化（データベース利用版）
+    init_trending_manager()
     
     print("初期化完了！ブラウザで http://localhost:5000 にアクセスしてください")
     app.run(host='0.0.0.0', port=5000, debug=True)
