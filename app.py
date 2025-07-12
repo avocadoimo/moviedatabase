@@ -94,7 +94,8 @@ def site_access_required(f):
         
         # サイトアクセス認証をチェック
         if not session.get('site_authenticated'):
-            return redirect(url_for('site_login'))
+            # 現在のURLを next パラメータとして保存
+            return redirect(url_for('site_login', next=request.url))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -119,14 +120,17 @@ def site_login():
             print("サイトアクセス認証成功")
             
             # 元々アクセスしようとしていたページにリダイレクト
-            next_page = request.args.get('next', url_for('search'))
+            next_page = request.args.get('next') or request.form.get('next', url_for('search'))
             return redirect(next_page)
         else:
             print("サイトアクセス認証失敗: 間違ったパスワード")
             return render_template('site_login.html', error="パスワードが正しくありません")
     
-    # 既に認証済みの場合はリダイレクト
+    # 既に認証済みの場合でも、nextパラメータがあれば処理
     if session.get('site_authenticated'):
+        next_page = request.args.get('next')
+        if next_page:
+            return redirect(next_page)
         return redirect(url_for('search'))
     
     return render_template('site_login.html')
