@@ -2,71 +2,513 @@
 
 {% block title %}興行収入データベース{% endblock %}
 
+{% block head %}
+<style>
+    /* 基本スタイル */
+    .search-form {
+        margin-bottom: 30px;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    .form-grid {
+        display: grid;
+        gap: 20px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-label {
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .form-input, .form-select {
+        padding: 10px 12px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s ease;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .form-input:focus, .form-select:focus {
+        outline: none;
+        border-color: #1a73e8;
+        box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    }
+
+    .range-inputs {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .range-separator {
+        font-weight: 600;
+        color: #666;
+        text-align: center;
+    }
+
+    /* チェックボックス */
+    .year-checkboxes, .genre-checkboxes {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 8px;
+        max-height: 120px;
+        overflow-y: auto;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        padding: 12px;
+        background: #f9f9f9;
+    }
+
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+    /* 検索ボタン */
+    .search-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 20px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 120px;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .btn-primary {
+        background: #1a73e8;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #1558b0;
+        transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+        background: #f5f5f5;
+        color: #333;
+        border: 1px solid #ddd;
+    }
+
+    /* 折りたたみ機能 */
+    .collapsible {
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .collapsible:after {
+        content: '▼';
+        font-size: 12px;
+        transition: transform 0.3s ease;
+    }
+
+    .collapsible.collapsed:after {
+        transform: rotate(-90deg);
+    }
+
+    .collapsible-content {
+        max-height: 200px;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+
+    .collapsible-content.collapsed {
+        max-height: 0;
+    }
+
+    .selection-count {
+        font-size: 12px;
+        color: #666;
+        margin-top: 4px;
+    }
+
+    .search-options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+
+    .match-type {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+
+    .match-type label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+    /* テーブルスタイル */
+    .view-toggle {
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .view-toggle a {
+        padding: 8px 16px;
+        background-color: #f5f5f5;
+        border-radius: 6px;
+        color: #333;
+        text-decoration: none;
+        font-size: 14px;
+        border: 1px solid #ccc;
+    }
+
+    .table-container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+
+    .table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .table th {
+        background-color: #f0f0f0;
+        padding: 12px;
+        border: 1px solid #ccc;
+        text-align: left;
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .table td {
+        padding: 12px;
+        border: 1px solid #ccc;
+        font-size: 14px;
+    }
+
+    .table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+
+    .table a {
+        color: #1a73e8;
+        text-decoration: none;
+    }
+
+    .table a:hover {
+        text-decoration: underline;
+    }
+
+    .section-title {
+        font-size: 1.3em;
+        font-weight: bold;
+        margin-bottom: 15px;
+        border-left: 4px solid #1a73e8;
+        padding-left: 10px;
+    }
+
+    .pagination {
+        text-align: center;
+        margin-top: 20px;
+    }
+
+    .pagination a {
+        margin: 0 8px;
+        padding: 8px 12px;
+        text-decoration: none;
+        color: #1a73e8;
+        border-radius: 6px;
+    }
+
+    .pagination a:hover {
+        background-color: #f0f7ff;
+    }
+
+    /* レスポンシブ対応 */
+    @media (max-width: 767px) {
+        .search-form {
+            padding: 16px;
+        }
+        
+        .form-row {
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        
+        .range-inputs {
+            grid-template-columns: 1fr auto 1fr;
+            gap: 8px;
+        }
+        
+        .search-actions {
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .btn {
+            width: 100%;
+            min-width: auto;
+            padding: 14px 20px;
+        }
+        
+        .year-checkboxes, .genre-checkboxes {
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            padding: 8px;
+        }
+        
+        .checkbox-item {
+            font-size: 12px;
+        }
+
+        .search-options {
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+        
+        .table {
+            font-size: 12px;
+        }
+        
+        .table th, .table td {
+            padding: 8px;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 
-<h2>興行収入データベース</h2>
+<!-- 検索フォーム（search.htmlと同じ機能） -->
+<div class="search-form">
+    <form method="get" id="searchForm">
+        <div class="form-grid">
+            <!-- 基本検索 -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label" for="title">作品名</label>
+                    <input type="text" id="title" name="title" class="form-input" 
+                           value="{{ request.args.get('title', '') }}" 
+                           placeholder="映画タイトルを入力">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="director">監督</label>
+                    <input type="text" id="director" name="director" class="form-input" 
+                           value="{{ request.args.get('director', '') }}" 
+                           placeholder="監督名を入力">
+                </div>
+            </div>
 
-<!-- 検索フォーム -->
-<form method="get" style="margin-bottom: 20px;">
-    年: <input type="text" name="year" value="{{ request.args.get('year', '') }}">
-    タイトル: <input type="text" name="title" value="{{ request.args.get('title', '') }}">
-    配給会社: <input type="text" name="distributor" value="{{ request.args.get('distributor', '') }}">
-    <br><br>
-    興収（億円）: <input type="text" name="min_revenue" placeholder="最小" value="{{ request.args.get('min_revenue', '') }}">
-    ～ <input type="text" name="max_revenue" placeholder="最大" value="{{ request.args.get('max_revenue', '') }}">
-    <br><br>
-    監督名: <input type="text" name="director" value="{{ request.args.get('director', '') }}">
-    キャスト名: <input type="text" name="actor" value="{{ request.args.get('actor', '') }}">
-    <input type="submit" value="検索" class="button">
-</form>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label" for="actor">キャスト</label>
+                    <input type="text" id="actor" name="actor" class="form-input" 
+                           value="{{ request.args.get('actor', '') }}" 
+                           placeholder="キャスト名を入力">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="distributor">配給会社</label>
+                    <input type="text" id="distributor" name="distributor" class="form-input" 
+                           value="{{ request.args.get('distributor', '') }}" 
+                           placeholder="配給会社を入力">
+                </div>
+            </div>
 
-<!-- カード表示への切り替えリンク -->
-<div style="margin-bottom: 10px;">
-    <a href="{{ url_for('search') }}"
-       style="padding: 6px 12px; background-color: #f5f5f5; border-radius: 6px; color: #333; text-decoration: none; border: 1px solid #ccc;">
-       カード表示に切り替え
-    </a>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label" for="category">区分</label>
+                    <select id="category" name="category" class="form-select">
+                        <option value="">すべて</option>
+                        <option value="邦画" {% if request.args.get('category') == '邦画' %}selected{% endif %}>邦画</option>
+                        <option value="洋画" {% if request.args.get('category') == '洋画' %}selected{% endif %}>洋画</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">興行収入（億円）</label>
+                    <div class="range-inputs">
+                        <input type="number" name="min_revenue" class="form-input" 
+                               placeholder="最小" value="{{ request.args.get('min_revenue', '') }}" 
+                               min="0" step="0.1">
+                        <span class="range-separator">〜</span>
+                        <input type="number" name="max_revenue" class="form-input" 
+                               placeholder="最大" value="{{ request.args.get('max_revenue', '') }}" 
+                               min="0" step="0.1">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 年選択 -->
+            <div class="form-group">
+                <label class="form-label collapsible" onclick="toggleCollapse('yearSection')">
+                    公開年
+                </label>
+                <div id="yearSection" class="collapsible-content">
+                    <div class="year-checkboxes">
+                        {% for year in range(2000, 2026) %}
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="years" value="{{ year }}"
+                                   {% if year|string in request.args.getlist('years') %}checked{% endif %}>
+                            <span>{{ year }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div class="selection-count" id="yearCount">選択: 0件</div>
+                </div>
+            </div>
+
+            <!-- ジャンル選択 -->
+            <div class="form-group">
+                <label class="form-label collapsible" onclick="toggleCollapse('genreSection')">
+                    ジャンル
+                </label>
+                <div id="genreSection" class="collapsible-content">
+                    <div class="genre-checkboxes">
+                        {% set genres = ['SF', 'アクション', 'アニメ', 'アドベンチャー・冒険', 'オムニバス', 'クライム', 'コメディ', 'サスペンス', 'ショートフィルム・短編', 'スポーツ', 'スリラー', 'ドキュメンタリー', 'ドラマ', 'パニック', 'バイオレンス', 'ファミリー', 'ミステリー', 'ミュージカル', 'ヤクザ・任侠', '恋愛', '戦争', '時代劇', '伝記', '歴史', '西部劇'] %}
+                        {% for genre in genres %}
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="genres" value="{{ genre }}"
+                                   {% if genre in request.args.getlist('genres') %}checked{% endif %}>
+                            <span>{{ genre }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div class="selection-count" id="genreCount">選択: 0件</div>
+                </div>
+            </div>
+
+            <!-- 検索オプション -->
+            <div class="search-options">
+                <div class="form-group">
+                    <label class="form-label">年検索条件</label>
+                    <div class="match-type">
+                        <label>
+                            <input type="radio" name="year_match" value="any" 
+                                   {% if request.args.get('year_match', 'any') == 'any' %}checked{% endif %}>
+                            指定年のいずれか
+                        </label>
+                        <label>
+                            <input type="radio" name="year_match" value="range" 
+                                   {% if request.args.get('year_match') == 'range' %}checked{% endif %}>
+                            範囲指定
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ジャンル検索条件</label>
+                    <div class="match-type">
+                        <label>
+                            <input type="radio" name="genre_match" value="any" 
+                                   {% if request.args.get('genre_match', 'any') == 'any' %}checked{% endif %}>
+                            一部一致（OR）
+                        </label>
+                        <label>
+                            <input type="radio" name="genre_match" value="all" 
+                                   {% if request.args.get('genre_match') == 'all' %}checked{% endif %}>
+                            完全一致（AND）
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 検索ボタン -->
+            <div class="search-actions">
+                <button type="submit" class="btn btn-primary">
+                    検索
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="clearForm()">
+                    クリア
+                </button>
+            </div>
+        </div>
+    </form>
 </div>
 
-<!-- 並び替え -->
-<table style="width: 100%; border-collapse: collapse; background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-    <thead>
-        <tr style="background-color: #f0f0f0;">
-            <th style="padding: 10px; border: 1px solid #ccc;">
-                <a href="{{ url_for('table_view', order_by='year', sort='asc') }}">年</a>
-            </th>
-            <th style="padding: 10px; border: 1px solid #ccc;">
-                <a href="{{ url_for('table_view', order_by='release_date', sort='asc') }}">公開日</a>
-            </th>
-            <th style="padding: 10px; border: 1px solid #ccc;">
-                <a href="{{ url_for('table_view', order_by='title', sort='asc') }}">作品名</a>
-            </th>
-            <th style="padding: 10px; border: 1px solid #ccc;">
-                <a href="{{ url_for('table_view', order_by='revenue', sort='desc') }}">興収(億円)</a>
-            </th>
-            <th style="padding: 10px; border: 1px solid #ccc;">
-                <a href="{{ url_for('table_view', order_by='category', sort='asc') }}">区分</a>
-            </th>
-            <th style="padding: 10px; border: 1px solid #ccc;">
-                <a href="{{ url_for('table_view', order_by='distributor', sort='asc') }}">配給会社</a>
-            </th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for m in movies %}
-        <tr>
-            <td style="padding: 10px; border: 1px solid #ccc;">{{ m.year }}</td>
-            <td style="padding: 10px; border: 1px solid #ccc;">{{ m.release_date }}</td>
-            <td style="padding: 10px; border: 1px solid #ccc;">
-                <a href="{{ url_for('movie_detail', movie_id=m.id) }}">{{ m.title }}</a>
-            </td>
-            <td style="padding: 10px; border: 1px solid #ccc;">{{ m.revenue }}</td>
-            <td style="padding: 10px; border: 1px solid #ccc;">{{ m.category }}</td>
-            <td style="padding: 10px; border: 1px solid #ccc;">{{ m.distributor }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<!-- 表示切り替え -->
+<div class="view-toggle">
+    <a href="{{ url_for('search', **request.args) }}">カード表示に切り替え</a>
+</div>
+
+<div class="section-title">
+    検索結果
+    {% if total_results %}
+        <span style="font-size: 0.8em; color: #666;">({{ total_results }} 件)</span>
+    {% endif %}
+</div>
+
+<!-- テーブル表示 -->
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th><a href="{{ url_for('table_view', order_by='year', sort='asc', **request.args) }}">年</a></th>
+                <th><a href="{{ url_for('table_view', order_by='release_date', sort='asc', **request.args) }}">公開日</a></th>
+                <th><a href="{{ url_for('table_view', order_by='title', sort='asc', **request.args) }}">作品名</a></th>
+                <th><a href="{{ url_for('table_view', order_by='revenue', sort='desc', **request.args) }}">興収(億円)</a></th>
+                <th><a href="{{ url_for('table_view', order_by='category', sort='asc', **request.args) }}">区分</a></th>
+                <th><a href="{{ url_for('table_view', order_by='distributor', sort='asc', **request.args) }}">配給会社</a></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in movies %}
+            <tr>
+                <td>{{ m.year }}</td>
+                <td>{{ m.release_date }}</td>
+                <td><a href="{{ url_for('movie_detail', movie_id=m.id) }}">{{ m.title }}</a></td>
+                <td>{{ m.revenue }}</td>
+                <td>{{ m.category }}</td>
+                <td>{{ m.distributor }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 
 {% if not movies %}
 <div style="text-align: center; padding: 40px; color: #666;">
@@ -75,16 +517,53 @@
 </div>
 {% endif %}
 
-<div style="text-align: center; margin-top: 20px;">
+<div class="pagination">
     {% if pagination.has_prev %}
-        <a href="{{ url_for('table_view', page=pagination.prev_num) }}" 
-           style="margin: 0 10px; text-decoration: none; color: #1a73e8;">← 前へ</a>
+        <a href="{{ url_for('table_view', page=pagination.prev_num, **request.args) }}">← 前へ</a>
     {% endif %}
     <span>ページ {{ pagination.page }} / {{ pagination.pages }}</span>
     {% if pagination.has_next %}
-        <a href="{{ url_for('table_view', page=pagination.next_num) }}" 
-           style="margin: 0 10px; text-decoration: none; color: #1a73e8;">次へ →</a>
+        <a href="{{ url_for('table_view', page=pagination.next_num, **request.args) }}">次へ →</a>
     {% endif %}
 </div>
+
+<script>
+// 折りたたみ機能
+function toggleCollapse(sectionId) {
+    const content = document.getElementById(sectionId);
+    const trigger = content.previousElementSibling;
+    
+    content.classList.toggle('collapsed');
+    trigger.classList.toggle('collapsed');
+}
+
+// フォームクリア
+function clearForm() {
+    document.getElementById('searchForm').reset();
+    updateSelectionCounts();
+}
+
+// 選択数カウント更新
+function updateSelectionCounts() {
+    const yearCheckboxes = document.querySelectorAll('input[name="years"]:checked');
+    document.getElementById('yearCount').textContent = `選択: ${yearCheckboxes.length}件`;
+    
+    const genreCheckboxes = document.querySelectorAll('input[name="genres"]:checked');
+    document.getElementById('genreCount').textContent = `選択: ${genreCheckboxes.length}件`;
+}
+
+// ページロード時の初期化
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelectionCounts();
+    
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectionCounts);
+    });
+    
+    // 初期状態で折りたたみ
+    toggleCollapse('yearSection');
+    toggleCollapse('genreSection');
+});
+</script>
 
 {% endblock %}
