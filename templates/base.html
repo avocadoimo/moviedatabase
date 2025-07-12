@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="description" content="日本映画の興行収入データを検索・閲覧できるWebアプリケーション">
-    <meta name="theme-color" content="#1a73e8">
+    <meta name="theme-color" content="#000000">
     <title>{% block title %}映画データベース{% endblock %}</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,25 +42,14 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        /* 新しいヘッダーデザイン */
+        /* ヘッダーデザイン（黒色に変更、絵文字削除） */
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000000;
             color: white;
             padding: 0;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             position: relative;
             overflow: hidden;
-        }
-
-        header:before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.05)"/><circle cx="80" cy="40" r="1" fill="rgba(255,255,255,0.03)"/><circle cx="40" cy="80" r="1.5" fill="rgba(255,255,255,0.04)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-            pointer-events: none;
         }
 
         .header-content {
@@ -93,10 +82,6 @@
             margin: 0;
             letter-spacing: 1px;
             text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-            background: linear-gradient(45deg, #fff, #f0f8ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
 
         .logo-subtitle {
@@ -163,15 +148,10 @@
             width: 100%;
         }
 
-        .nav-icon {
-            display: block;
-            font-size: 18px;
-            margin-bottom: 4px;
-        }
-
         .nav-text {
             font-size: 11px;
             line-height: 1.2;
+            margin-top: 4px;
         }
 
         /* メインコンテンツ */
@@ -312,11 +292,6 @@
 
             .nav-link {
                 padding: 12px 4px;
-            }
-
-            .nav-icon {
-                font-size: 16px;
-                margin-bottom: 2px;
             }
 
             .nav-text {
@@ -494,8 +469,8 @@
         <div class="header-content">
             <div class="logo-section">
                 <a href="{{ url_for('search') }}" class="logo-link">
-                    <h1 class="logo-text">PROJECTION VISION</h1>
-                    <p class="logo-subtitle">映画データベース</p>
+                    <h1 class="logo-text">映画データベース</h1>
+                    <p class="logo-subtitle">Movie Database</p>
                 </a>
             </div>
             
@@ -504,7 +479,6 @@
                     <div class="nav-item">
                         <a href="{{ url_for('search') }}" 
                            class="nav-link {% if request.endpoint == 'search' %}active{% endif %}">
-                            <span class="nav-icon">🏠</span>
                             <span class="nav-text">HOME</span>
                         </a>
                     </div>
@@ -512,7 +486,6 @@
                     <div class="nav-item">
                         <a href="{{ url_for('table_view') }}" 
                            class="nav-link {% if request.endpoint == 'table_view' %}active{% endif %}">
-                            <span class="nav-icon">📊</span>
                             <span class="nav-text">DATABASE</span>
                         </a>
                     </div>
@@ -520,7 +493,6 @@
                     <div class="nav-item">
                         <a href="{{ url_for('articles') }}" 
                            class="nav-link {% if request.endpoint == 'articles' %}active{% endif %}">
-                            <span class="nav-icon">📰</span>
                             <span class="nav-text">ARTICLES</span>
                         </a>
                     </div>
@@ -528,7 +500,6 @@
                     <div class="nav-item">
                         <a href="{{ url_for('movie_chat') }}" 
                            class="nav-link {% if request.endpoint == 'movie_chat' %}active{% endif %}">
-                            <span class="nav-icon">🤖</span>
                             <span class="nav-text">AI CHAT</span>
                         </a>
                     </div>
@@ -536,7 +507,6 @@
                     <div class="nav-item">
                         <a href="{{ url_for('sns_ranking') }}" 
                            class="nav-link {% if request.endpoint == 'sns_ranking' %}active{% endif %}">
-                            <span class="nav-icon">📈</span>
                             <span class="nav-text">TRENDING</span>
                             <span class="nav-badge" id="trendingBadge" style="display: none;">10</span>
                         </a>
@@ -555,14 +525,14 @@
             <div class="admin-section">
                 {% if session.get('admin_authenticated') %}
                 <a href="{{ url_for('admin_dashboard') }}" class="admin-link authenticated">
-                    🛠️ 管理画面
+                    管理画面
                 </a>
                 <a href="{{ url_for('admin_logout') }}" class="logout-link">
-                    🚪 ログアウト
+                    ログアウト
                 </a>
                 {% else %}
                 <a href="{{ url_for('admin_login') }}" class="admin-link">
-                    🔐 管理者ログイン
+                    管理者ログイン
                 </a>
                 {% endif %}
             </div>
