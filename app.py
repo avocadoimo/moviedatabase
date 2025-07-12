@@ -147,9 +147,7 @@ def admin_login():
             print("管理者ログイン失敗: 間違ったパスワード")
             return render_template('admin_login.html', error="パスワードが正しくありません")
     
-    if session.get('admin_authenticated'):
-        return redirect(url_for('admin_dashboard'))
-    
+    # 管理者認証済みでもログインページを表示（再認証可能にする）
     return render_template('admin_login.html')
 
 @app.route("/admin/logout")
